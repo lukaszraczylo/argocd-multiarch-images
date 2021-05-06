@@ -33,18 +33,12 @@ jobs:
           echo "::set-output name=GITHUB_RUN_ID::$TMP_GITHUB_COUNT_NUMBER"
           echo "::set-output name=ARGOCD_RELEASE_VERSION::$(curl --silent "https://api.github.com/repos/argoproj/argo-cd/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')"
   build:
-    runs-on: ubuntu-20.04
-    name: Build amd64 and arm64 images for ARGOCD
+    needs: [ prepare ]
+    name: Docker image build (multiarch)
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout ARGO CD repo
+      - name: Checkout repo
         uses: actions/checkout@v2
-        with:
-          repository: 'argoproj/argo-cd'
-      - name: Get release sha and run number
-        id: get_sha
-        run: |
-          echo "GITHUB_SHA=$(echo ${GITHUB_SHA::8})" >> $GITHUB_ENV
-          echo "GITHUB_RUN_ID=$(echo ${GITHUB_RUN_NUMBER})" >> $GITHUB_ENV
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
       - name: Set up Docker Buildx
@@ -54,8 +48,8 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GCHR_PAT }}
+          username: ${{ github.ACTOR }}
+          password: ${{ secrets.GHCR_TOKEN }}
       - name: Prepare for push
         id: prep
         run: |
@@ -70,15 +64,25 @@ jobs:
           echo ::set-output name=labels::${LABELS}
           BUILD_ARGS="BRANCH=$BRANCH"
           echo ::set-output name=args::${BUILD_ARGS}
-      - name: Tag names
-        run: echo ${{ steps.prep.outputs.tags }}
-      - name: Build and push
+      - name: Build image
         id: docker_build
         uses: docker/build-push-action@v2
         with:
           builder: ${{ steps.buildx.outputs.name }}
           platforms: linux/arm64,linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
           tags: ${{ steps.prep.outputs.tags }}
-          build-args: ${{ steps.prep.outputs.args }}
+          build-args: |
+            GITHUB_AUTH_TOKEN=${{ secrets.GHCR_TOKEN }}
+            MICROSERVICE_NAME=${{ github.event.repository.name }}
+            GITHUB_COMMIT_NUMBER=${{ needs.prepare.outputs.GITHUB_COMMIT_NUMBER }}
+            GITHUB_SHA=${{ needs.prepare.outputs.GITHUB_SHA }}
+            ${{ steps.prep.outputs.args }}
           labels: ${{ steps.prep.outputs.labels }}
+          no-cache: false
+      - name: Scan image
+        uses: anchore/scan-action@v2
+        if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
+        with:
+          image: "${{ needs.prepare.outputs.DOCKER_IMAGE }}:${{ needs.prepare.outputs.GITHUB_SHA }}"
+          fail-build: true
