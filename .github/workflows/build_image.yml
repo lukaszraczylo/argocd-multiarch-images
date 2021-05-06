@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 2 * * *"
+
 jobs:
   prepare:
     name: Preparing build context
@@ -19,6 +20,8 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v2
         with:
+          repository: 'argoproj/argo-cd'
+          path: '/home/runner/work/argocd-multiarch-images/argocd-multiarch-images/argo-cd'
           fetch-depth: '0'
       - name: Setting environment variables
         id: get_env
@@ -70,6 +73,8 @@ jobs:
         with:
           builder: ${{ steps.buildx.outputs.name }}
           platforms: linux/arm64,linux/amd64
+          context: /home/runner/work/argocd-multiarch-images/argocd-multiarch-images/argo-cd
+          file: /home/runner/work/argocd-multiarch-images/argocd-multiarch-images/argo-cd/Dockerfile
           push: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
           tags: ${{ steps.prep.outputs.tags }}
           build-args: |
