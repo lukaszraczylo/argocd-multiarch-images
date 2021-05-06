@@ -20,6 +20,10 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v2
         with:
+          fetch-depth: '0'
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
           repository: 'argoproj/argo-cd'
           path: '/home/runner/work/argocd-multiarch-images/argocd-multiarch-images/argo-cd'
           fetch-depth: '0'
